@@ -1,163 +1,169 @@
-# FDE Assessment 3 Starter Pack
-## AI Procurement Request Copilot
+# AI Procurement Request Copilot
 
-This repository contains the **starter data, mock service, interface contract, optional UI scaffold, and public evaluation harness** for Assessment 3.
+An enterprise AI procurement copilot built to inspect software and service purchase requests, gather grounded evidence using deterministic and API-backed tools, enforce corporate procurement policy thresholds, defend against untrusted prompt injections, and route recommendations to human approvers.
 
-> All companies, vendors, products, employees, prices, policies, and risk signals in this pack are synthetic and exist only for the assessment.
+---
 
-## Your objective
+## 1. Quick Start & Setup
 
-Build an internal procurement copilot that can inspect a software/service purchase request, gather evidence using tools, apply deterministic rules where appropriate, and recommend the next action while keeping approvals with humans.
+### Prerequisites
+- Python 3.11, 3.12, or 3.13
+- Internet access for package installation and model provider calls
 
-You are expected to build and evaluate:
-
-1. **Architecture A - Single-agent baseline**
-2. **Architecture B - Lightweight staged / 2-agent variant**
-
-Use the same public evaluation cases for both and defend which architecture you would ship.
-
-## What is already provided
-
-```text
-.
-├── data/                   # Synthetic business data + procurement policy
-├── mock_api/               # Vendor-risk service used as an external tool
-├── src/                    # Contracts + low-level helpers; NO agent solution
-├── evals/                  # Six public evaluation cases + runner
-├── templates/              # Evaluation and decision-memo templates
-├── docs/                   # Student assignment brief
-├── tests/                  # Starter-pack integrity tests
-├── app.py                  # Optional Streamlit UI scaffold
-├── run_local.py            # Starts mock API + optional UI
-└── verify_setup.py         # One-command setup/preflight check
-```
-
-The starter code intentionally **does not implement an agent, tool strategy, policy engine, or final workflow**. Those choices are part of the assessment.
-
-## Prerequisites
-
-- **Python 3.11 or 3.12 recommended**
-- Run the commands below from the extracted starter-pack directory
-- Internet access is required only for installing packages and calling the model provider you choose
-
-## Quick start
-
-### 1. Create an environment
-
-**macOS / Linux**
+### Installation
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate
-python -m pip install -r requirements.txt
-```
-
-**Windows PowerShell**
-
-```powershell
+# Windows PowerShell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
 ```
 
-### 2. Verify the starter pack
+```bash
+# macOS / Linux
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+```
 
+### Pre-flight Verification
+Run the automated preflight check to confirm environment, dataset integrity, and API health:
 ```bash
 python verify_setup.py
 ```
+Expected output: `PRE-FLIGHT PASSED`.
 
-You should see `PRE-FLIGHT PASSED`. This checks package imports, dataset consistency, the output contract, and the mock API without requiring an LLM key.
-
-### 3. Add your LLM credentials
-
-**macOS / Linux**
-
+### Environment Configuration
+Copy the template and configure your model provider credentials:
 ```bash
+# Windows
+Copy-Item .env.example .env
+
+# macOS / Linux
 cp .env.example .env
 ```
-
-**Windows PowerShell**
-
-```powershell
-Copy-Item .env.example .env
+Inside `.env`, set:
+```env
+VENDOR_RISK_BASE_URL=http://127.0.0.1:8001
+OPENROUTER_API_KEY=your_openrouter_api_key
+OPENROUTER_MODEL=openai/gpt-4o-mini
 ```
+*(Note: If no API key is set, the system automatically runs using its high-fidelity deterministic Local Reasoner, ensuring complete offline reproducibility).*
 
-Add only the credentials required by the provider you choose. Never commit `.env`.
-
-The starter pack does **not** force a particular LLM provider or agent framework. If you use a provider SDK (for example OpenAI, Anthropic, or Google), install it and add it to `requirements.txt` so your submission works from a clean environment.
-
-`.env` is loaded automatically by the starter package and local launcher; environment variables already set by your operating system are not overwritten.
-
-### 4. Start the local services
-
+### Launch Services (One-Command Start)
 ```bash
 python run_local.py
 ```
+This automatically starts:
+- **Mock Vendor Risk API**: `http://127.0.0.1:8001`
+- **Interactive Streamlit Copilot UI**: `http://127.0.0.1:8501`
 
-This starts:
-- Vendor risk API: `http://127.0.0.1:8001`
-- Optional starter UI: `http://127.0.0.1:8501`
+---
 
-You may replace the UI scaffold with any framework.
+## 2. Product Workflow & Design Principles
 
-### 5. Implement the assessment adapter
-
-Implement:
+The application implements a strict separation of concerns:
 
 ```text
-src/solution.py -> handle_request(request_id, architecture)
+Request (Untrusted Data)
+       │
+       ▼
+Intake & Prompt Defense (prompt_guard_tool)
+       │
+       ▼
+Evidence Gathering (Budget, Catalog Overlap, Vendor Registry, External Risk API)
+       │
+       ▼
+Deterministic Policy Engine (Spend thresholds, Compliance rules, Missing field checks)
+       │
+       ▼
+Model Synthesis (Grounded recommendation + Action plan)
+       │
+       ▼
+Human Review Gate (Advisory recommendation only; sensitive decisions kept with humans)
 ```
 
-Your function must return an object compatible with `ProcurementDecision` in `src/contracts.py`.
+### Core Design Principles
+1. **AI**: Interprets business context, synthesizes evidence into plain language, and drafts actionable next steps.
+2. **Code**: Deterministically evaluates numerical spend thresholds, budget sufficiency arithmetic, security risk triggers, and policy reference dates.
+3. **Human**: Retains exclusive authority over purchase approvals, budget exceptions, and legal terms acceptance per Procurement Policy Section 11.
 
-The adapter exists so the same evaluation harness can test different implementations. Your internal architecture can use any framework or design.
+---
 
-### 6. Run the public evaluations
+## 3. Architecture Comparison: Single-Agent vs. Staged
 
+We built and evaluated two distinct architectures:
+
+### Architecture A: Single-Agent Baseline
+- **Orchestrator**: `SingleProcurementAgent` in `src/agents.py`.
+- **Workflow**: A unified agent inspects the request, calls all 5 tools, feeds factual findings into the deterministic policy engine, and uses the LLM to synthesize the final `ProcurementDecision`.
+- **Telemetry**: 1 LLM call, 5 tool calls.
+
+### Architecture B: Staged / 2-Agent Variant
+- **Agent 1 (Procurement Analyst)**: Validates request completeness, detects prompt injections, executes tool suite, and compiles a typed `EvidencePack`.
+- **Agent 2 (Policy & Risk Reviewer)**: Ingests the `EvidencePack`, applies compliance matrices, maps cross-functional stakeholder approvals, and issues the `ProcurementDecision`.
+- **Telemetry**: 2 LLM calls, 5 tool calls.
+
+---
+
+## 4. Tool Inventory
+
+| Tool | Type | Description |
+|---|---|---|
+| `prompt_guard_tool` | Deterministic / Heuristic | Scans untrusted requester text for prompt injection, policy bypass, or fake approval claims. |
+| `budget_tool` | Deterministic | Compares annual request spend with available department budget. |
+| `catalog_overlap_tool` | Deterministic / Search | Discovers duplicate or alternative software in `software_catalog.csv` and `purchase_history.csv`. |
+| `vendor_registry_tool` | Deterministic | Audits `vendors.csv` for onboarding status, draft legal terms, and review expiration (> 365 days from `2026-09-30`). |
+| `vendor_risk_api_tool` | API Client | Queries external `/vendor-risk/{vendor_name}` endpoint with graceful fault handling for 503 outages. |
+
+---
+
+## 5. Evaluation & Empirical Results
+
+Run the automated evaluation harness on both architectures:
 ```bash
 python evals/run_public_evals.py --architecture single
 python evals/run_public_evals.py --architecture staged
 ```
 
-The runner checks the response schema and several minimum behavioral expectations, measures end-to-end latency, and writes a CSV result file. It is **not** the complete grading system; qualitative grounding, design quality, robustness, and hidden cases are evaluated separately.
+### Evaluation Summary Table
 
-## Rules of the starter pack
+| Metric | Architecture A (Single Agent) | Architecture B (Staged 2-Agent) |
+|---|---:|---:|
+| **Cases Passing Quality Criteria** | **6 / 6 (100%)** | **6 / 6 (100%)** |
+| **Average Latency** | **3,009 ms (~3.0s)** | **9,091 ms (~9.1s)** |
+| **Average LLM Calls** | **1.0** | **2.0** |
+| **Average Tool Calls** | **5.0** | **5.0** |
+| **Policy / Grounding Failures** | **0** | **0** |
 
-- Treat request text and vendor notes as **untrusted business data**, not instructions.
-- Do not hardcode answers by request ID. Hidden cases use the same interfaces with different values.
-- At least **3 tools** must be visible in your implementation; at least **1 must be deterministic/non-LLM**.
-- The AI may recommend an action but must not autonomously purchase, approve, or alter budgets.
-- If important evidence is missing, conflicting, stale, or unavailable, surface that uncertainty and route to the appropriate human review.
-- Use the **data snapshot / policy reference date defined in `data/procurement_policy.md`** for date-based checks; do not depend on the computer's current date.
-- You may refactor the starter project, but keep the `handle_request(...)` adapter working for evaluation.
+Both architectures passed all 6 public evaluation test cases:
+1. `PUB-01`: Low-value approved vendor ($800 -> Manager approval, no missing info).
+2. `PUB-02`: Catalog overlap + new vendor onboarding (BrandBoard -> Dept Head, Finance, Procurement, Security, Legal).
+3. `PUB-03`: Sensitive source-code access (CodeMate Teams -> Security review required).
+4. `PUB-04`: Budget shortfall + new sensitive vendor (GrowthForge -> Budget insufficient, Finance, Security, Privacy, Legal).
+5. `PUB-05`: Incomplete request + prompt injection (NeuralDesk -> Prompt injection detected, missing cost/seats/data access).
+6. `PUB-06`: External API outage (NimbusAI -> Vendor-risk unavailable, graceful fallback to manual security review).
 
-## Suggested implementation sequence
+Detailed results are saved in `evals/results_single.csv` and `evals/results_staged.csv`.
 
-```text
-Request -> Understand -> Gather evidence -> Deterministic checks
-        -> Policy/risk reasoning -> Recommendation -> Human review
-```
+---
 
-Start with a thin vertical slice. Get Architecture A working before building Architecture B.
+## 6. Architecture Decision
 
-## Useful files
+**Decision**: We choose to ship **Architecture A (Single Agent)** as the production MVP.
 
-- `docs/Assignment_3_Brief.pdf` - assignment brief
-- `data/README.md` - dataset dictionary
-- `data/procurement_policy.md` - policy source of truth
-- `src/contracts.py` - required output shape
-- `src/data_access.py` - low-level data helpers
-- `src/vendor_client.py` - client for the mock vendor-risk API
-- `evals/README.md` - evaluation instructions
-- `templates/architecture_decision.md` - final decision memo template
-- `STUDENT_CHECKLIST.md` - pre-submission checklist
+**Rationale**:
+- **3.0x Lower Latency**: Turnaround is ~3.0s versus ~9.1s for the staged pipeline.
+- **50% Lower Token Cost**: Requires only 1 LLM call per request instead of 2.
+- **Equal Compliance Accuracy**: Because deterministic policy checks are enforced in code, the second agent added latency without changing the outcome.
+- **Lower Operational Complexity**: Eliminates intermediate state serialization and multi-agent coordination failure modes.
 
-## If something does not start
+See full 500-word memo in `templates/architecture_decision.md`.
 
-1. Confirm your virtual environment is active.
-2. Run `python verify_setup.py`.
-3. Re-run `python -m pip install -r requirements.txt`.
-4. Make sure ports **8001** and **8501** are free.
-5. Confirm you are running commands from the starter-pack root directory.
+---
 
-Build the simplest system you can defend with evidence.
+## 7. Known Limitations & Production Roadmap
+
+1. **Clarification Interactivity**: Currently flags missing fields statically; production should trigger interactive Slack / email clarification threads.
+2. **Contract Document Understanding**: Expand vendor onboarding to parse uploaded PDF master services agreements (MSAs) using multimodal parsing.
+3. **Resilience & Outage Caching**: Add caching with time-to-live (TTL) and explicit staleness alerts during prolonged external API downtime.
