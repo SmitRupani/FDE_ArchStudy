@@ -41,26 +41,48 @@ def _handle_termination(signum: int, frame: object) -> None:
     raise KeyboardInterrupt
 
 
+def is_port_in_use(port: int) -> bool:
+    import socket
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        return s.connect_ex(("127.0.0.1", port)) == 0
+
+
 def main() -> None:
     signal.signal(signal.SIGTERM, _handle_termination)
     procs: list[subprocess.Popen] = []
     try:
-        print("Starting vendor-risk API on http://127.0.0.1:8001 ...")
-        api_proc = start(
-            [
-                sys.executable,
-                "-m",
-                "uvicorn",
-                "mock_api.app:app",
-                "--host",
-                "127.0.0.1",
-                "--port",
-                "8001",
-            ]
-        )
-        procs.append(api_proc)
-        wait_for_api("http://127.0.0.1:8001/health", api_proc)
-        print("Vendor-risk API is ready.")
+        # Check if mock API is already running
+        api_already_running = False
+        try:
+            r = requests.get("http://127.0.0.1:8001/health", timeout=0.5)
+            if r.status_code == 200 and r.json().get("status") == "ok":
+                print("Vendor-risk API is already running on http://127.0.0.1:8001 (reusing active instance).")
+                api_already_running = True
+        except Exception:
+            pass
+
+        if not api_already_running:
+            if is_port_in_use(8001):
+                raise RuntimeError(
+                    "Port 8001 is already in use by another application. "
+                    "Make sure port 8001 is free before starting."
+                )
+            print("Starting vendor-risk API on http://127.0.0.1:8001 ...")
+            api_proc = start(
+                [
+                    sys.executable,
+                    "-m",
+                    "uvicorn",
+                    "mock_api.app:app",
+                    "--host",
+                    "127.0.0.1",
+                    "--port",
+                    "8001",
+                ]
+            )
+            procs.append(api_proc)
+            wait_for_api("http://127.0.0.1:8001/health", api_proc)
+            print("Vendor-risk API is ready.")
 
         try:
             __import__("streamlit")
@@ -68,20 +90,25 @@ def main() -> None:
             print("Streamlit is not installed. Run: pip install -r requirements.txt")
             print("The mock API is still running. Press Ctrl+C to stop.")
         else:
-            print("Starting starter UI on http://127.0.0.1:8501 ...")
-            procs.append(
-                start(
-                    [
-                        sys.executable,
-                        "-m",
-                        "streamlit",
-                        "run",
-                        "app.py",
-                        "--server.port",
-                        "8501",
-                    ]
+            if is_port_in_use(8501):
+                print("Copilot UI is already running on http://127.0.0.1:8501.")
+            else:
+                print("Starting copilot UI on http://127.0.0.1:8501 ...")
+                procs.append(
+                    start(
+                        [
+                            sys.executable,
+                            "-m",
+                            "streamlit",
+                            "run",
+                            "app.py",
+                            "--server.port",
+                            "8501",
+                            "--server.headless",
+                            "true",
+                        ]
+                    )
                 )
-            )
 
         while True:
             time.sleep(1)
