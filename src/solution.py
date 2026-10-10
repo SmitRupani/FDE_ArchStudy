@@ -3,14 +3,21 @@ from __future__ import annotations
 from src.contracts import Architecture, ProcurementDecision
 
 
+from src.agents import SingleProcurementAgent, StagedProcurementWorkflow
+
+_single_agent = SingleProcurementAgent()
+_staged_workflow = StagedProcurementWorkflow()
+
+
 def handle_request(request_id: str, architecture: Architecture = "single") -> ProcurementDecision:
     """Assessment adapter.
 
-    Keep this function callable by the public/hidden evaluation harness.
-    Your internal implementation may use any framework, modules, agents, tools,
-    deterministic checks, or orchestration strategy.
+    Routes evaluation cases to Architecture A (single-agent baseline) or
+    Architecture B (lightweight staged / 2-agent variant).
     """
-    raise NotImplementedError(
-        "Implement handle_request(...) as part of Assessment 3. "
-        "Return a ProcurementDecision-compatible object."
-    )
+    if architecture == "single":
+        return _single_agent.run(request_id)
+    elif architecture == "staged":
+        return _staged_workflow.run(request_id)
+    else:
+        raise ValueError(f"Unsupported architecture: '{architecture}'. Choose 'single' or 'staged'.")
