@@ -144,3 +144,13 @@ In strict alignment with the core design principle:
 1. **Autonomous PO Issuance / Purchasing**: Policy Section 11 strictly mandates human purchase authority. Autonomous purchasing is excluded by design.
 2. **Direct Budget Modification**: The agent flags shortfalls but cannot alter ledger allocations.
 3. **Overly Complex Multi-Agent Frameworks**: Avoided heavy frameworks (LangGraph, CrewAI, AutoGen) that introduce unbounded latency and runtime failure points for what is fundamentally a two-stage verification pipeline.
+
+---
+
+## 7. Key Assumptions
+
+1. **Policy Reference Snapshot Date**: All date-based logic (e.g. 365-day vendor security assessment validity) assumes the static reference snapshot `2026-09-30` from `data/procurement_policy.md` rather than system current date.
+2. **Untrusted Business Data**: Requester text and notes are untrusted inputs, not instructions. Prompt injection attempts cannot bypass security, budget, or policy constraints.
+3. **Deterministic Arithmetic**: Budget validation assumes `available_usd = annual_software_budget_usd - committed_usd`.
+4. **Failsafe Degradation**: If third-party vendor risk data cannot be retrieved (HTTP 503 or outage), the system assumes evidence is unverified and requires manual Security review.
+5. **Human Gate Permanence**: Advisory recommendation outputs always preserve `human_review_required = True`.

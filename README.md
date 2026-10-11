@@ -162,7 +162,17 @@ See full 500-word memo in `templates/architecture_decision.md`.
 
 ---
 
-## 7. Known Limitations & Production Roadmap
+## 7. Key Assumptions
+
+1. **Policy Reference Snapshot Date**: Date calculations (e.g. 365-day vendor review expiration) strictly use the fixed evaluation reference date **`2026-09-30`** defined in `data/procurement_policy.md`, rather than system wall-clock time.
+2. **Untrusted Business Data**: All request fields (business justification, product name, requester notes) are treated as untrusted input. Adversarial prompts cannot bypass policy gates or grant automated approvals.
+3. **Advisory Authority (Human-in-the-Loop)**: The copilot is strictly an advisory engine. In compliance with Policy Section 11, it cannot autonomously purchase software, alter budget balances, or override human reviews.
+4. **Deterministic Budget Consistency**: Budget calculations assume `available_usd = annual_software_budget_usd - committed_usd` across department records.
+5. **Graceful Degradation**: When external vendor services or evidence sources are unavailable (e.g., HTTP 503 outages), the system assumes evidence is unverified and escalates to manual review rather than inferring favorable compliance.
+
+---
+
+## 8. Known Limitations & Production Roadmap
 
 1. **Clarification Interactivity**: Currently flags missing fields statically; production should trigger interactive Slack / email clarification threads.
 2. **Contract Document Understanding**: Expand vendor onboarding to parse uploaded PDF master services agreements (MSAs) using multimodal parsing.
