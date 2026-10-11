@@ -118,7 +118,24 @@ We built and evaluated two distinct architectures:
 
 ---
 
-## 5. Evaluation & Empirical Results
+## 5. Enterprise Compliance, Auditability & Observability
+
+To meet enterprise compliance standards (**SOX 404**, **SOC 2 Type II CC6.8**, and **ISO 27001 A.9.4**), the system includes an immutable cryptographic audit and telemetry layer:
+
+1. **Cryptographic SHA-256 Audit Trail (`src/audit.py`)**:
+   - Computes deterministic SHA-256 digests of the raw incoming request and the output decision summary.
+   - Generates a tamper-evident composite signature linking `request_hash`, `policy_version` (`2026.09`), `policy_reference_date` (`2026-09-30`), and `decision_hash`.
+   - Persists append-only audit records to `data/audit_log.jsonl`.
+   - Provides live mathematical verification (`verify_audit_integrity`) in both code and the Streamlit UI to prove that business inputs or outputs were not tampered with.
+
+2. **Granular Observability & Token Cost Accounting (`src/telemetry.py`)**:
+   - Tracks exact prompt tokens, completion tokens, and total tokens per run.
+   - Estimates inference costs in USD (based on standard production rates: $0.150/1M input, $0.600/1M output).
+   - Records high-resolution per-tool execution latencies in milliseconds (`tool_latencies_ms`), identifying upstream bottlenecks.
+
+---
+
+## 6. Evaluation & Empirical Results
 
 Run the automated evaluation harness on both architectures:
 ```bash
@@ -148,7 +165,7 @@ Detailed results are saved in `evals/results_single.csv` and `evals/results_stag
 
 ---
 
-## 6. Architecture Decision
+## 7. Architecture Decision
 
 **Decision**: We choose to ship **Architecture A (Single Agent)** as the production MVP.
 
@@ -162,7 +179,7 @@ See full 500-word memo in `templates/architecture_decision.md`.
 
 ---
 
-## 7. Key Assumptions
+## 8. Key Assumptions
 
 1. **Policy Reference Snapshot Date**: Date calculations (e.g. 365-day vendor review expiration) strictly use the fixed evaluation reference date **`2026-09-30`** defined in `data/procurement_policy.md`, rather than system wall-clock time.
 2. **Untrusted Business Data**: All request fields (business justification, product name, requester notes) are treated as untrusted input. Adversarial prompts cannot bypass policy gates or grant automated approvals.
@@ -172,7 +189,7 @@ See full 500-word memo in `templates/architecture_decision.md`.
 
 ---
 
-## 8. Known Limitations & Production Roadmap
+## 9. Known Limitations & Production Roadmap
 
 1. **Clarification Interactivity**: Currently flags missing fields statically; production should trigger interactive Slack / email clarification threads.
 2. **Contract Document Understanding**: Expand vendor onboarding to parse uploaded PDF master services agreements (MSAs) using multimodal parsing.

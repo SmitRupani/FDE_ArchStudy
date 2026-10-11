@@ -253,13 +253,48 @@ with col_right:
         st.markdown("##### ⏱️ Observability & Telemetry")
         tel = result.telemetry
         m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Latency", f"{latency_ms:.0f} ms")
-        m2.metric("LLM Calls", tel.llm_calls if tel else 0)
-        m3.metric("Tool Calls", tel.tool_calls if tel else 0)
-        m4.metric("Human Gate", "Required" if result.human_review_required else "Autonomous")
+        m1.metric("End-to-End Latency", f"{latency_ms:.0f} ms")
+        m2.metric("LLM Invocations", tel.llm_calls if tel else 0)
+        m3.metric("Tool Invocations", tel.tool_calls if tel else 0)
+        cost_str = f"${tel.estimated_cost_usd:.6f}" if tel and tel.estimated_cost_usd is not None else "$0.0000"
+        m4.metric("Est. Inference Cost", cost_str)
 
-        if tel and tel.tool_names:
-            st.caption(f"Tools invoked: {', '.join(tel.tool_names)}")
+        if tel and tel.total_tokens:
+            t_col1, t_col2, t_col3 = st.columns(3)
+            t_col1.caption(f"📥 **Prompt Tokens:** {tel.prompt_tokens:,}")
+            t_col2.caption(f"📤 **Completion Tokens:** {tel.completion_tokens:,}")
+            t_col3.caption(f"📊 **Total Tokens:** {tel.total_tokens:,}")
+
+        if tel and tel.tool_latencies_ms:
+            with st.expander("⏱️ Tool Execution Latencies Breakdown", expanded=False):
+                for t_name, t_ms in tel.tool_latencies_ms.items():
+                    st.write(f"- `{t_name}`: **{t_ms:.1f} ms**")
+
+        # Enterprise Auditability & Compliance Verification (SOX / SOC 2)
+        st.markdown("---")
+        st.markdown("##### 🛡️ Enterprise Audit & Compliance Ledger")
+        audit = result.audit_trail
+        if audit:
+            st.success(f"🔒 **Cryptographic Audit Record Generated**: `{audit.audit_id[:13]}...`")
+            framework_html = " ".join([f'<span class="badge-approval">📋 {fw}</span>' for fw in audit.compliance_frameworks])
+            st.markdown(framework_html, unsafe_allow_html=True)
+            
+            with st.expander("📜 View Audit Verification Details (SOX / SOC 2 / ISO 27001)", expanded=False):
+                st.markdown(f"**Audit UUID:** `{audit.audit_id}`")
+                st.markdown(f"**Timestamp (UTC):** `{audit.timestamp_utc}`")
+                st.markdown(f"**Policy Version & Baseline:** `{audit.policy_version}` (Date: `{audit.policy_reference_date}`)")
+                st.markdown(f"**Request SHA-256 Hash:** `{audit.request_hash}`")
+                st.markdown(f"**Decision SHA-256 Hash:** `{audit.decision_hash}`")
+                st.markdown(f"**Tamper-Evident Composite Signature:** `{audit.integrity_signature}`")
+                
+                from src.audit import verify_audit_integrity
+                is_valid, msg = verify_audit_integrity(audit, req, result.model_dump())
+                if is_valid:
+                    st.success(f"✅ {msg}")
+                else:
+                    st.error(f"❌ {msg}")
+        else:
+            st.info("No audit record generated for this session.")
 
         # Human Review Gate Check
         st.markdown("---")

@@ -154,3 +154,13 @@ In strict alignment with the core design principle:
 3. **Deterministic Arithmetic**: Budget validation assumes `available_usd = annual_software_budget_usd - committed_usd`.
 4. **Failsafe Degradation**: If third-party vendor risk data cannot be retrieved (HTTP 503 or outage), the system assumes evidence is unverified and requires manual Security review.
 5. **Human Gate Permanence**: Advisory recommendation outputs always preserve `human_review_required = True`.
+
+---
+
+## 8. Enterprise Compliance & Cryptographic Audit Ledger
+
+To meet **SOX 404**, **SOC 2 Type II (CC6.8)**, and **ISO 27001 (A.9.4)** audit requirements:
+- **Tamper-Evident SHA-256 Signatures**: Each request and resulting decision is cryptographically hashed (`request_hash`, `decision_hash`), linked into a composite HMAC-like signature.
+- **Append-Only Audit Ledger**: Persisted to `data/audit_log.jsonl` with policy version (`2026.09`) and snapshot date (`2026-09-30`).
+- **Cryptographic Verification**: Supported via `verify_audit_integrity` to detect unauthorized data or rule tampering.
+- **Granular Token Observability**: Tracks prompt tokens, completion tokens, USD inference cost, and millisecond tool latency breakdowns.
