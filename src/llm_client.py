@@ -139,7 +139,10 @@ def call_agent_llm(
     telemetry.record_llm_call()
 
     if client is None:
-        # Local Reasoning Engine
+        # Local Reasoning Engine token approximation
+        est_prompt = max(1, len(system_prompt + user_prompt) // 4)
+        est_comp = max(1, len(default_rec + default_next_step) // 4)
+        telemetry.record_token_usage(est_prompt, est_comp)
         return default_rec, default_next_step
 
     try:
@@ -155,6 +158,13 @@ def call_agent_llm(
             max_tokens=350,
             timeout=15.0,
         )
+
+        if hasattr(response, "usage") and response.usage:
+            telemetry.record_token_usage(
+                response.usage.prompt_tokens or 0,
+                response.usage.completion_tokens or 0,
+            )
+
         content = response.choices[0].message.content or "{}"
         clean_content = content.strip()
         if clean_content.startswith("```json"):
@@ -171,4 +181,7 @@ def call_agent_llm(
         return rec, next_step
     except Exception as exc:
         # Fall back cleanly without crashing
+        est_prompt = max(1, len(system_prompt + user_prompt) // 4)
+        est_comp = max(1, len(default_rec + default_next_step) // 4)
+        telemetry.record_token_usage(est_prompt, est_comp)
         return default_rec, default_next_step

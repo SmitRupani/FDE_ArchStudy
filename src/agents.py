@@ -34,6 +34,10 @@ def resolve_department(request: dict[str, Any]) -> str:
 # ==============================================================================
 # Architecture A: Single-Agent Baseline
 # ==============================================================================
+import time
+from src.audit import generate_audit_record
+
+
 class SingleProcurementAgent:
     """Architecture A: Unified single agent that coordinates tool use, applies policy rules,
     and synthesizes a grounded decision."""
@@ -44,34 +48,39 @@ class SingleProcurementAgent:
         evidence_items: list[EvidenceItem] = []
 
         # 1. Tool execution: Prompt Guard
-        telemetry.record_tool_call("prompt_guard_tool")
+        t0 = time.perf_counter()
         prompt_res = prompt_guard_tool(request)
+        telemetry.record_tool_call("prompt_guard_tool", (time.perf_counter() - t0) * 1000)
         evidence_items.append(prompt_res["evidence"])
 
         # 2. Tool execution: Budget Verification
         department = resolve_department(request)
-        telemetry.record_tool_call("budget_tool")
+        t0 = time.perf_counter()
         budget_res = budget_tool(department, request.get("annual_cost_usd"))
+        telemetry.record_tool_call("budget_tool", (time.perf_counter() - t0) * 1000)
         evidence_items.append(budget_res["evidence"])
 
         # 3. Tool execution: Catalog Overlap
-        telemetry.record_tool_call("catalog_tool")
+        t0 = time.perf_counter()
         catalog_res = catalog_overlap_tool(
             request.get("product_name"),
             request.get("category"),
             request.get("vendor_name"),
         )
+        telemetry.record_tool_call("catalog_tool", (time.perf_counter() - t0) * 1000)
         evidence_items.append(catalog_res["evidence"])
 
         # 4. Tool execution: Internal Vendor Registry
         vendor_name = request.get("vendor_name", "")
-        telemetry.record_tool_call("vendor_registry_tool")
+        t0 = time.perf_counter()
         registry_res = vendor_registry_tool(vendor_name)
+        telemetry.record_tool_call("vendor_registry_tool", (time.perf_counter() - t0) * 1000)
         evidence_items.append(registry_res["evidence"])
 
         # 5. Tool execution: External Vendor Risk API
-        telemetry.record_tool_call("vendor_risk_api")
+        t0 = time.perf_counter()
         risk_api_res = vendor_risk_api_tool(vendor_name)
+        telemetry.record_tool_call("vendor_risk_api", (time.perf_counter() - t0) * 1000)
         evidence_items.append(risk_api_res["evidence"])
 
         # 6. Policy Rules Evaluation (Deterministic)
@@ -110,6 +119,20 @@ class SingleProcurementAgent:
             default_next_step=default_next_step,
         )
 
+        # 8. Construct Decision & Cryptographic Audit Record
+        decision_dict = {
+            "request_id": request_id,
+            "recommendation": rec,
+            "required_approvals": policy_res["required_approvals"],
+            "risk_flags": policy_res["risk_flags"],
+            "missing_information": policy_res["missing_information"],
+            "human_review_required": True,
+        }
+        audit_record = generate_audit_record(
+            request_payload=request,
+            decision_payload=decision_dict,
+        )
+
         return ProcurementDecision(
             request_id=request_id,
             recommendation=rec,
@@ -123,7 +146,13 @@ class SingleProcurementAgent:
                 llm_calls=telemetry.llm_calls,
                 tool_calls=telemetry.tool_calls,
                 tool_names=telemetry.tool_names,
+                prompt_tokens=telemetry.prompt_tokens,
+                completion_tokens=telemetry.completion_tokens,
+                total_tokens=telemetry.total_tokens,
+                estimated_cost_usd=telemetry.calculate_estimated_cost_usd(),
+                tool_latencies_ms=telemetry.tool_latencies_ms,
             ),
+            audit_trail=audit_record,
         )
 
 
@@ -153,34 +182,39 @@ class ProcurementAnalystAgent:
         evidence_items: list[EvidenceItem] = []
 
         # Intake check & Prompt Guard
-        telemetry.record_tool_call("prompt_guard_tool")
+        t0 = time.perf_counter()
         prompt_res = prompt_guard_tool(request)
+        telemetry.record_tool_call("prompt_guard_tool", (time.perf_counter() - t0) * 1000)
         evidence_items.append(prompt_res["evidence"])
 
         # Budget Check
         department = resolve_department(request)
-        telemetry.record_tool_call("budget_tool")
+        t0 = time.perf_counter()
         budget_res = budget_tool(department, request.get("annual_cost_usd"))
+        telemetry.record_tool_call("budget_tool", (time.perf_counter() - t0) * 1000)
         evidence_items.append(budget_res["evidence"])
 
         # Software Catalog Overlap Check
-        telemetry.record_tool_call("catalog_tool")
+        t0 = time.perf_counter()
         catalog_res = catalog_overlap_tool(
             request.get("product_name"),
             request.get("category"),
             request.get("vendor_name"),
         )
+        telemetry.record_tool_call("catalog_tool", (time.perf_counter() - t0) * 1000)
         evidence_items.append(catalog_res["evidence"])
 
         # Internal Vendor Registry
         vendor_name = request.get("vendor_name", "")
-        telemetry.record_tool_call("vendor_registry_tool")
+        t0 = time.perf_counter()
         registry_res = vendor_registry_tool(vendor_name)
+        telemetry.record_tool_call("vendor_registry_tool", (time.perf_counter() - t0) * 1000)
         evidence_items.append(registry_res["evidence"])
 
         # External Vendor Risk API
-        telemetry.record_tool_call("vendor_risk_api")
+        t0 = time.perf_counter()
         risk_api_res = vendor_risk_api_tool(vendor_name)
+        telemetry.record_tool_call("vendor_risk_api", (time.perf_counter() - t0) * 1000)
         evidence_items.append(risk_api_res["evidence"])
 
         # Agent 1 Synthesis LLM call
@@ -244,6 +278,20 @@ class PolicyRiskReviewerAgent:
             default_next_step=default_next_step,
         )
 
+        # Construct Decision & Cryptographic Audit Record
+        decision_dict = {
+            "request_id": pack.request["request_id"],
+            "recommendation": rec,
+            "required_approvals": policy_res["required_approvals"],
+            "risk_flags": policy_res["risk_flags"],
+            "missing_information": policy_res["missing_information"],
+            "human_review_required": True,
+        }
+        audit_record = generate_audit_record(
+            request_payload=pack.request,
+            decision_payload=decision_dict,
+        )
+
         return ProcurementDecision(
             request_id=pack.request["request_id"],
             recommendation=rec,
@@ -257,7 +305,13 @@ class PolicyRiskReviewerAgent:
                 llm_calls=telemetry.llm_calls,
                 tool_calls=telemetry.tool_calls,
                 tool_names=telemetry.tool_names,
+                prompt_tokens=telemetry.prompt_tokens,
+                completion_tokens=telemetry.completion_tokens,
+                total_tokens=telemetry.total_tokens,
+                estimated_cost_usd=telemetry.calculate_estimated_cost_usd(),
+                tool_latencies_ms=telemetry.tool_latencies_ms,
             ),
+            audit_trail=audit_record,
         )
 
 
